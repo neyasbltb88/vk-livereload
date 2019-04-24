@@ -75,7 +75,8 @@ function js() {
             return "Error webpack: " + error.message;
         })).on('error', emit_end))
         .pipe(gulpif(isDev, sourcemaps.init({ loadMaps: true })))
-        .pipe(gulp.dest(conf.dest + '/scripts'))
+        .pipe(gulpif(isDev, gulp.dest(conf.dest + '/scripts')))
+        .pipe(gulpif(isProd, gulp.dest(conf.dest)))
         .pipe(gulpif(isDev, sourcemaps.write(conf.dest + '/scripts/maps')))
         .pipe(browserSync.reload({ stream: true }))
         .pipe(livereload())
@@ -101,11 +102,13 @@ gulp.task('build', ['removedist', 'livereload2build', 'js'], function() {
 })
 
 function livereload2build() {
-    return gulp.src([
-            conf.src + '/livereload.js',
-            conf.src + '/index.html',
-        ])
-        .pipe(gulp.dest(conf.dest))
+    if (isDev) {
+        return gulp.src([
+                conf.src + '/livereload.js',
+                conf.src + '/index.html',
+            ])
+            .pipe(gulp.dest(conf.dest))
+    }
 }
 
 function removedist() {
