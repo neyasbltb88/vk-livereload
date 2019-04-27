@@ -6,4 +6,4 @@ function test() {
     })
 }
 
-export { test };
+export default test;

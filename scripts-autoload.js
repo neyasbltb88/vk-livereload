@@ -295,8 +295,6 @@ function liveReloadClientInit() {
 
             // livereload скрипт успешно загружен
             fetchLiveReloadScriptSuccess() {
-                console.log('%c%s', (window.log_color) ? window.log_color.yellow : '', '*ScriptsAutoload* загружен скрипт livereload');
-
                 // Когда скрипт будет загружен, подвязаться к событиям livereload
                 this.handlerLiveReloadConnect();
 

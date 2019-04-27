@@ -1,5 +1,4 @@
-import { test } from './modules/test';
-import test2 from './modules/test2';
+import test from './modules/test';
 
 async function async_test() {
     let test_message = await test();
@@ -7,5 +6,3 @@ async function async_test() {
 }
 
 async_test();
-
-test2('Второй тест импорта!');
