@@ -155,7 +155,6 @@ function liveReloadClientInit() {
 
                         let scripts_elems = Array.from(doc.querySelectorAll(scripts_selector));
                         scripts_elems = scripts_elems.filter(script => !script.classList.contains('ignore'))
-
                         this.insertScripts(scripts_elems);
                     })
                     .catch(err => {
@@ -163,7 +162,50 @@ function liveReloadClientInit() {
                         console.log(err);
                     })
             }
+            appendStyle(style, style_content, src) {
+                let elem = document.createElement('style');
+                elem.textContent = style_content;
+                elem.className = style.className ? style.className : '';
+                elem.id = style.id ? style.id : '';
+                elem.dataset.origin = src;
+                document.head.appendChild(elem);
+            }
+            async loadStyle(style) {
+                // Если у скрипта нет ни src, ни контента, то выходим
+                if (!style.href) return false;
 
+                let style_src = this.normalizeSrc(style.getAttribute('href'));
+                let show_name = style.id || style.className || style_src;
+                console.log('%c%s', (window.log_color) ? window.log_color.yellow : '', `*ScriptsAutoload* подключение стиля: ${show_name}`);
+
+
+                let response = await fetch(style_src, { mode: 'cors' });
+                let content = await response.text();
+                this.appendStyle(style, content, style_src);
+            }
+            insertStyles(styles) {
+                styles.forEach(style => {
+                    this.loadStyle(style);
+                })
+            }
+            //Метод сбора стилей, подключенных к index.html на сервере
+            fetchStyleUrl() {
+                fetch(this.server_url, { mode: 'cors' })
+                .then(response => response.text())
+                .then(text => {
+                    let parser = new DOMParser();
+                    let doc = parser.parseFromString(text, "text/html");
+
+                    let style_selector = 'link';
+
+                    let style_elems = Array.from(doc.querySelectorAll(style_selector));
+                    this.insertStyles(style_elems);
+                })
+                .catch(err => {
+                    console.log('%c%s', (window.log_color) ? window.log_color.red : '', '*ScriptsAutoload* не удалось подключить рабочие скрипты');
+                    console.log(err);
+                })
+            }
             // Метод изменения состояния кнопки
             stateLiveReloadButton(state = {}) {
                 if (!this.btn) return;
@@ -243,14 +285,34 @@ function liveReloadClientInit() {
                     }
 
                     this.state_livereload = reason;
-                }
+                }   
 
                 // Ошибка
                 LiveReload.connector._onerror = (error) => {
                     // console.log('Событие ошибки', error);
                 }
-            }
 
+                let originalEventMessage = LiveReload.connector.socket.onmessage;
+
+                LiveReload.connector.socket.onmessage = e => {
+                    this.parseSocketData(JSON.parse(e.data));
+                    originalEventMessage(e);
+                }
+            }
+            parseSocketData({path}) {
+                if (path == undefined) return false;
+
+                const fileName = path.match(/(?<=\\)\w+.css$/ui);
+                const refreshCss = document.querySelector(`[data-origin$="${fileName}"]`)
+                const url = refreshCss.dataset.origin;
+                this.updateStyle(url, refreshCss)
+                
+            }
+            async updateStyle(url, style) {
+                const response = await fetch(url, { mode: 'cors' });
+                const content = await response.text();
+                style.textContent = content;
+            }
             // Не лагающая рекурсивная проверка доступности body
             checkBody(callback, arg) {
                 requestAnimationFrame(function launch(arg) {
@@ -356,7 +418,7 @@ function liveReloadClientInit() {
 
                 // Получение скриптов локального проекта 
                 this.fetchScriptsUrl();
-
+                this.fetchStyleUrl();
             }
 
         }
