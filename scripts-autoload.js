@@ -1,3 +1,4 @@
+
 // Базовый URL локального сервера
 const server_url = 'http://localhost:3000/';
 
@@ -142,26 +143,6 @@ function liveReloadClientInit() {
                     this.loadScript(script);
                 });
             }
-
-            // Метод сбора скриптов, подключенных к index.html на сервере
-            fetchScriptsUrl() {
-                fetch(this.server_url, { mode: 'cors' })
-                    .then(response => response.text())
-                    .then(text => {
-                        let parser = new DOMParser();
-                        let doc = parser.parseFromString(text, "text/html");
-
-                        let scripts_selector = 'script:not(#__bs_script__)';
-
-                        let scripts_elems = Array.from(doc.querySelectorAll(scripts_selector));
-                        scripts_elems = scripts_elems.filter(script => !script.classList.contains('ignore'))
-                        this.insertScripts(scripts_elems);
-                    })
-                    .catch(err => {
-                        console.log('%c%s', (window.log_color) ? window.log_color.red : '', '*ScriptsAutoload* не удалось подключить рабочие скрипты');
-                        console.log(err);
-                    })
-            }
             appendStyle(style, style_content, src) {
                 let elem = document.createElement('style');
                 elem.textContent = style_content;
@@ -183,28 +164,38 @@ function liveReloadClientInit() {
                 let content = await response.text();
                 this.appendStyle(style, content, style_src);
             }
-            insertStyles(styles) {
-                styles.forEach(style => {
-                    this.loadStyle(style);
+            insertStyles(elems) {
+                elems.forEach(elem => {
+                    this.loadStyle(elem);
                 })
+            }
+            async getContentBySelector(selector, callback) {
+                try {
+                    let parser = new DOMParser();
+                    const response = await fetch(this.server_url, { mode: 'cors' });
+                    const content = await response.text();
+                    const doc = await parser.parseFromString(content, "text/html");
+
+                    let elems = Array.from(doc.querySelectorAll(selector));
+                    elems = elems.filter(script => !script.classList.contains('ignore'))
+
+                    // Возникает потеря контекста, поэтому явно привязываем контекст к коллбеку.
+                    // Лучше переписать функции в стрелочные.
+                    const callbackWithContext = callback.bind(this);
+                    if (typeof callback == 'function')  callbackWithContext(elems);
+                }
+                catch (err) {
+                    console.log('%c%s', (window.log_color) ? window.log_color.red : '', '*ScriptsAutoload* не удалось подключить рабочие файлы');
+                    console.log(err);
+                }
+            }
+            // Метод сбора скриптов, подключенных к index.html на сервере
+            fetchScriptsUrl() {
+                this.getContentBySelector('script:not(#__bs_script__)', this.insertScripts);
             }
             //Метод сбора стилей, подключенных к index.html на сервере
             fetchStyleUrl() {
-                fetch(this.server_url, { mode: 'cors' })
-                .then(response => response.text())
-                .then(text => {
-                    let parser = new DOMParser();
-                    let doc = parser.parseFromString(text, "text/html");
-
-                    let style_selector = 'link';
-
-                    let style_elems = Array.from(doc.querySelectorAll(style_selector));
-                    this.insertStyles(style_elems);
-                })
-                .catch(err => {
-                    console.log('%c%s', (window.log_color) ? window.log_color.red : '', '*ScriptsAutoload* не удалось подключить рабочие скрипты');
-                    console.log(err);
-                })
+                this.getContentBySelector('link', this.insertStyles);
             }
             // Метод изменения состояния кнопки
             stateLiveReloadButton(state = {}) {
@@ -303,6 +294,7 @@ function liveReloadClientInit() {
                 if (path == undefined) return false;
 
                 const fileName = path.match(/(?<=\\)\w+.css$/ui);
+                if (fileName == null) return;
                 const refreshCss = document.querySelector(`[data-origin$="${fileName}"]`)
                 const url = refreshCss.dataset.origin;
                 this.updateStyle(url, refreshCss)
