@@ -1,3 +1,4 @@
+
 // Базовый URL локального сервера
 const server_url = 'http://localhost:3000/';
 
@@ -142,28 +143,60 @@ function liveReloadClientInit() {
                     this.loadScript(script);
                 });
             }
+            appendStyle(style, style_content, src) {
+                let elem = document.createElement('style');
+                elem.textContent = style_content;
+                elem.className = style.className ? style.className : '';
+                elem.id = style.id ? style.id : '';
+                elem.dataset.origin = src;
+                document.head.appendChild(elem);
+            }
+            async loadStyle(style) {
+                // Если у скрипта нет ни src, ни контента, то выходим
+                if (!style.href) return false;
 
+                let style_src = this.normalizeSrc(style.getAttribute('href'));
+                let show_name = style.id || style.className || style_src;
+                console.log('%c%s', (window.log_color) ? window.log_color.yellow : '', `*ScriptsAutoload* подключение стиля: ${show_name}`);
+
+
+                let response = await fetch(style_src, { mode: 'cors' });
+                let content = await response.text();
+                this.appendStyle(style, content, style_src);
+            }
+            insertStyles(elems) {
+                elems.forEach(elem => {
+                    this.loadStyle(elem);
+                })
+            }
+            async getContentBySelector(selector, callback) {
+                try {
+                    let parser = new DOMParser();
+                    const response = await fetch(this.server_url, { mode: 'cors' });
+                    const content = await response.text();
+                    const doc = await parser.parseFromString(content, "text/html");
+
+                    let elems = Array.from(doc.querySelectorAll(selector));
+                    elems = elems.filter(script => !script.classList.contains('ignore'))
+
+                    // Возникает потеря контекста, поэтому явно привязываем контекст к коллбеку.
+                    // Лучше переписать функции в стрелочные.
+                    const callbackWithContext = callback.bind(this);
+                    if (typeof callback == 'function')  callbackWithContext(elems);
+                }
+                catch (err) {
+                    console.log('%c%s', (window.log_color) ? window.log_color.red : '', '*ScriptsAutoload* не удалось подключить рабочие файлы');
+                    console.log(err);
+                }
+            }
             // Метод сбора скриптов, подключенных к index.html на сервере
             fetchScriptsUrl() {
-                fetch(this.server_url, { mode: 'cors' })
-                    .then(response => response.text())
-                    .then(text => {
-                        let parser = new DOMParser();
-                        let doc = parser.parseFromString(text, "text/html");
-
-                        let scripts_selector = 'script:not(#__bs_script__)';
-
-                        let scripts_elems = Array.from(doc.querySelectorAll(scripts_selector));
-                        scripts_elems = scripts_elems.filter(script => !script.classList.contains('ignore'))
-
-                        this.insertScripts(scripts_elems);
-                    })
-                    .catch(err => {
-                        console.log('%c%s', (window.log_color) ? window.log_color.red : '', '*ScriptsAutoload* не удалось подключить рабочие скрипты');
-                        console.log(err);
-                    })
+                this.getContentBySelector('script:not(#__bs_script__)', this.insertScripts);
             }
-
+            //Метод сбора стилей, подключенных к index.html на сервере
+            fetchStyleUrl() {
+                this.getContentBySelector('link', this.insertStyles);
+            }
             // Метод изменения состояния кнопки
             stateLiveReloadButton(state = {}) {
                 if (!this.btn) return;
@@ -243,14 +276,35 @@ function liveReloadClientInit() {
                     }
 
                     this.state_livereload = reason;
-                }
+                }   
 
                 // Ошибка
                 LiveReload.connector._onerror = (error) => {
                     // console.log('Событие ошибки', error);
                 }
-            }
 
+                let originalEventMessage = LiveReload.connector.socket.onmessage;
+
+                LiveReload.connector.socket.onmessage = e => {
+                    this.parseSocketData(JSON.parse(e.data));
+                    originalEventMessage(e);
+                }
+            }
+            parseSocketData({path}) {
+                if (path == undefined) return false;
+
+                const fileName = path.match(/(?<=\\)\w+.css$/ui);
+                if (fileName == null) return;
+                const refreshCss = document.querySelector(`[data-origin$="${fileName}"]`)
+                const url = refreshCss.dataset.origin;
+                this.updateStyle(url, refreshCss)
+                
+            }
+            async updateStyle(url, style) {
+                const response = await fetch(url, { mode: 'cors' });
+                const content = await response.text();
+                style.textContent = content;
+            }
             // Не лагающая рекурсивная проверка доступности body
             checkBody(callback, arg) {
                 requestAnimationFrame(function launch(arg) {
@@ -356,7 +410,7 @@ function liveReloadClientInit() {
 
                 // Получение скриптов локального проекта 
                 this.fetchScriptsUrl();
-
+                this.fetchStyleUrl();
             }
 
         }

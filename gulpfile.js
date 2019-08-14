@@ -26,6 +26,9 @@ const conf = {
 const html_files = [
     './app/**/*.html',
 ]
+const css_files = [
+    './app/styles/**/*.css',
+]
 
 const js_files = [
     './app/scripts/**/*.js',
@@ -89,10 +92,17 @@ function html() {
         .pipe(livereload())
 }
 
+function css() {
+    return gulp.src(css_files)
+        .pipe(gulp.dest(conf.dest + '/styles/'))
+        .pipe(browserSync.reload({ stream: true }))
+        .pipe(livereload());
+}
 
 gulp.task('watch', ['setDev', 'build', 'browser_sync'], function() {
     livereload.listen()
 
+    gulp.watch(css_files, ['css'])
     gulp.watch(html_files, ['html'])
     gulp.watch(js_files, ['js'])
 })
@@ -127,6 +137,7 @@ function setDev() {
 
 gulp.task('browser_sync', browser_sync)
 gulp.task('js', js)
+gulp.task('css', css)
 gulp.task('html', html)
 gulp.task('removedist', removedist)
 gulp.task('livereload2build', livereload2build)
