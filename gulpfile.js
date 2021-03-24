@@ -98,18 +98,15 @@ function css() {
         .pipe(browserSync.reload({ stream: true }))
         .pipe(livereload());
 }
+function setDev() {
+    isDev = true
+    isProd = false
+    webpack_config.mode = isDev ? 'development' : 'production'
+    webpack_config.devtool = isDev ? 'eval-source-map' : 'none'
+}
 
-gulp.task('watch', ['setDev', 'build', 'browser_sync'], function() {
-    livereload.listen()
 
-    gulp.watch(css_files, ['css'])
-    gulp.watch(html_files, ['html'])
-    gulp.watch(js_files, ['js'])
-})
 
-gulp.task('build', ['removedist', 'livereload2build', 'js'], function() {
-
-})
 
 function livereload2build() {
     if (isDev) {
@@ -127,14 +124,6 @@ function removedist() {
     } catch (err) {}
 }
 
-function setDev() {
-    isDev = true
-    isProd = false
-    webpack_config.mode = isDev ? 'development' : 'production'
-    webpack_config.devtool = isDev ? 'eval-source-map' : 'none'
-}
-
-
 gulp.task('browser_sync', browser_sync)
 gulp.task('js', js)
 gulp.task('css', css)
@@ -142,6 +131,13 @@ gulp.task('html', html)
 gulp.task('removedist', removedist)
 gulp.task('livereload2build', livereload2build)
 gulp.task('setDev', setDev)
+gulp.task('build', gulp.parallel('removedist', 'livereload2build', 'js', function() {
 
-
-gulp.task('default', ['watch'])
+}))
+gulp.task('watch', gulp.parallel('setDev','build', 'browser_sync', function() {
+    livereload.listen()
+    gulp.watch(css_files, gulp.series('css'))
+    gulp.watch(html_files, gulp.series('html'))
+    gulp.watch(js_files, gulp.series('js'))
+}))
+gulp.task('default', gulp.series('watch'))
